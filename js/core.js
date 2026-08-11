@@ -212,7 +212,6 @@ export function createCarouselInstancedMesh(uvRects, count, baseWidth = 1.9, bas
   geometry.setAttribute('instanceUvOffset', new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4));
   geometry.setAttribute('instanceUvScale', new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2));
   geometry.setAttribute('instanceOpacity', new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
-  geometry.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
   const material = new THREE.MeshBasicNodeMaterial({
     transparent: true,

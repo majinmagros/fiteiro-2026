@@ -62,7 +62,7 @@ async function hero() {
   try {
     const mount = document.getElementById('hero-canvas');
     if (!mount) return;
-    const { renderer, cleanup: cleanupRenderer } = createRenderer(mount);
+    const { renderer, cleanup: cleanupRenderer } = await createRenderer(mount);
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, mount.clientWidth / mount.clientHeight, 0.1, 200);
     camera.position.set(0, 1, 13);
@@ -84,8 +84,8 @@ async function hero() {
   const { texture: atlasTexture, uvRects } = await createTextureAtlas(IMGS);
   if (!atlasTexture) return;
 
-  const { mesh, dummy, setInstanceOpacity } = createCarouselInstancedMesh(uvRects, IMGS.length, 1.9, 1.9);
-  mesh.material.uniforms.uAtlas.value = atlasTexture;
+  const { mesh, dummy, setInstanceOpacity, setAtlas } = createCarouselInstancedMesh(uvRects, IMGS.length, 1.9, 1.9);
+  setAtlas(atlasTexture);
   scene.add(mesh);
 
   // Torus rings
@@ -166,7 +166,6 @@ async function hero() {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  }
 } catch (e) {
   console.error('Erro em hero():', e);
 }
@@ -176,10 +175,10 @@ async function destaques() {
   try {
     const mount = document.getElementById('destaques-canvas');
   if (!mount) return;
-  const { renderer, cleanup: cleanupRenderer } = createRenderer(mount);
-  const scene = new THREE.Scene();
+    const { renderer, cleanup: cleanupRenderer } = await createRenderer(mount);
+    const scene = new THREE.Scene();
 
-  const aspect = mount.clientWidth / mount.clientHeight;
+    const aspect = mount.clientWidth / mount.clientHeight;
   const viewH = 5;
   const viewW = viewH * aspect;
   const camera = new THREE.OrthographicCamera(-viewW / 2, viewW / 2, viewH / 2, -viewH / 2, 0.1, 100);
@@ -235,14 +234,13 @@ async function destaques() {
   geometry.setAttribute('instanceUvOffset', new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4));
   geometry.setAttribute('instanceUvScale', new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2));
   geometry.setAttribute('instanceOpacity', new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
-  geometry.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
   const material = new THREE.MeshBasicMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
     onBeforeCompile: (shader) => {
-      shader.uniforms.uAtlas = { value: null };
+      shader.uniforms.uAtlas = { value: atlasTexture };
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
         `#include <common>
@@ -276,7 +274,6 @@ async function destaques() {
 
   const mesh = new THREE.InstancedMesh(geometry, material, count);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  mesh.material.uniforms.uAtlas.value = atlasTexture;
   scene.add(mesh);
 
   // Load textures to get aspect ratios for UV scaling
@@ -365,7 +362,6 @@ async function destaques() {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  }
 } catch (e) {
   console.error('Erro em destaques():', e);
 }
