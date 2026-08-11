@@ -4,13 +4,41 @@ THREE.Cache.enabled = true;
 
 export const TAU = Math.PI * 2;
 
-export function createRenderer(el, opts = {}) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+export function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export async function createRenderer(el, opts = {}) {
+  let renderer = null;
+  let api = 'webgl';
+  try {
+    if (typeof THREE.WebGPURenderer === 'function' && typeof navigator !== 'undefined' && navigator.gpu) {
+      const r = new THREE.WebGPURenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance'
+      });
+      await r.init();
+      renderer = r;
+      api = 'webgpu';
+    }
+  } catch (err) {
+    console.warn('[fiteiro-2026] WebGPU indisponível, usando WebGL.', err);
+    renderer = null;
+  }
+  if (!renderer) {
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+      failIfMajorPerformanceCaveat: false
+    });
+  }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   el.appendChild(renderer.domElement);
   fit(renderer, el);
-  return { renderer, cleanup: () => renderer.dispose() };
+  return { renderer, api, cleanup: () => renderer.dispose() };
 }
 
 export function fit(renderer, el) {
@@ -174,54 +202,32 @@ export async function createTextureAtlas(urls, maxDim = 2048) {
 
 /**
  * Creates an InstancedMesh for a carousel of images using a texture atlas.
- * Returns { mesh, uvRects, dummy, material, geometry, updateInstanceMatrix }
+ * NodeMaterial (TSL) — works on WebGL and WebGPU renderers.
+ * Call setAtlas(texture) with the atlas created by createTextureAtlas.
+ * Returns { mesh, uvRects, dummy, material, geometry, updateInstanceMatrix, setInstanceOpacity, setAtlas }
  */
 export function createCarouselInstancedMesh(uvRects, count, baseWidth = 1.9, baseHeight = 1.9) {
-  // Base geometry: unit plane, UVs will be transformed in shader
+  // Base geometry: unit plane, UVs will be transformed via node shader
   const geometry = new THREE.PlaneGeometry(1, 1);
   geometry.setAttribute('instanceUvOffset', new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4));
   geometry.setAttribute('instanceUvScale', new THREE.InstancedBufferAttribute(new Float32Array(count * 2), 2));
   geometry.setAttribute('instanceOpacity', new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
   geometry.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-  const material = new THREE.MeshBasicMaterial({
+  const material = new THREE.MeshBasicNodeMaterial({
     transparent: true,
     depthWrite: false,
-    side: THREE.DoubleSide,
-    // Custom shader to sample from atlas per instance
-    onBeforeCompile: (shader) => {
-      shader.uniforms.uAtlas = { value: null }; // set externally
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <common>',
-        `#include <common>
-        attribute vec4 instanceUvOffset; // u, v, width, height of sub-texture in atlas
-        attribute vec2 instanceUvScale;  // scale to apply to UV (for aspect ratio)
-        attribute float instanceOpacity; // per-instance opacity
-        varying vec2 vUvAtlas;
-        varying float vInstanceOpacity;`
-      );
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <uv_vertex>',
-        `#include <uv_vertex>
-        // Transform UV to atlas coordinates
-        vec2 uv = uv * instanceUvScale + instanceUvOffset.xy;
-        vUvAtlas = uv;
-        vInstanceOpacity = instanceOpacity;`
-      );
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <common>',
-        `#include <common>
-        uniform sampler2D uAtlas;
-        varying vec2 vUvAtlas;
-        varying float vInstanceOpacity;`
-      );
-      shader.fragmentShader = shader.fragmentShader.replace(
-        'vec4 diffuseColor = vec4( diffuse, opacity );',
-        `vec4 texel = texture2D(uAtlas, vUvAtlas);
-        vec4 diffuseColor = vec4(texel.rgb, texel.a * vInstanceOpacity * opacity);`
-      );
-    }
+    side: THREE.DoubleSide
   });
+
+  const tsl = THREE.TSL;
+  const atlasNode = tsl.texture();
+  const uvNode = tsl.uv()
+    .mul(tsl.attribute('instanceUvScale'))
+    .add(tsl.attribute('instanceUvOffset').xy);
+  const texel = atlasNode.sample(uvNode);
+  material.colorNode = texel.rgb;
+  material.opacityNode = texel.a.mul(tsl.attribute('instanceOpacity'));
 
   const mesh = new THREE.InstancedMesh(geometry, material, count);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -245,6 +251,10 @@ export function createCarouselInstancedMesh(uvRects, count, baseWidth = 1.9, bas
   uvScaleAttr.needsUpdate = true;
   opacityAttr.needsUpdate = true;
 
+  function setAtlas(atlasTexture) {
+    atlasNode.value = atlasTexture;
+  }
+
   function updateInstanceMatrix(index, position, rotation, scale = 1) {
     dummy.position.copy(position);
     dummy.rotation.copy(rotation);
@@ -259,5 +269,5 @@ export function createCarouselInstancedMesh(uvRects, count, baseWidth = 1.9, bas
     opacityAttr.needsUpdate = true;
   }
 
-  return { mesh, uvRects, dummy, material, geometry, updateInstanceMatrix, setInstanceOpacity };
+  return { mesh, uvRects, dummy, material, geometry, updateInstanceMatrix, setInstanceOpacity, setAtlas };
 }
