@@ -166,7 +166,6 @@ async function hero() {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  }
 } catch (e) {
   console.error('Erro em hero():', e);
 }
@@ -365,7 +364,6 @@ async function destaques() {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  }
 } catch (e) {
   console.error('Erro em destaques():', e);
 }

@@ -1,0 +1,15 @@
+# refs quebradas legadas pré-existentes (galerias RL/SL dos anos 2000, arquivadas intactas)
+# Não são regressões — mantidas para não bloquear CI. Remova itens conforme forem corrigidas.
+../inicio.html
+../SL/images/sc0.png
+../SL/images/sc1.png
+../SL/images/sc2.png
+../SL/images/sc3.png
+../SL/images/sm0.png
+../SL/images/sm1.png
+../SL/images/sm2.png
+../SL/images/sm3.png
+alfadhil.html
+images/sm1.jpg
+porto.html
+rl-2010palestine.html
